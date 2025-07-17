@@ -1,0 +1,2 @@
+pyirsdk
+PyQt5 
