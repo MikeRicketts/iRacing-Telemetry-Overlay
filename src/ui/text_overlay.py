@@ -5,6 +5,7 @@ Displays real-time telemetry data in a text format with customizable positioning
 """
 
 from PyQt5 import QtWidgets, QtCore, QtGui
+import math
 
 
 class TextOverlay(QtWidgets.QWidget):
@@ -153,24 +154,77 @@ class TextOverlay(QtWidgets.QWidget):
         painter.setPen(QtCore.Qt.NoPen)
         painter.drawRoundedRect(rect, 20, 20)
         
-        # Overlay lines
-        lines = [
-            f"Steering: {telemetry.get('steering', 0) * 180:.0f}°",
-            f"RPM: {telemetry.get('rpm', 0):.0f}",
-            f"Gear: {telemetry.get('gear', 0)}",
-            f"Throttle: {telemetry.get('throttle', 0) * 100:.0f}%",
-            f"Brake: {telemetry.get('brake', 0) * 100:.0f}%"
-        ]
-        
-        n_lines = len(lines)
         margin = 20
         available_height = rect.height() - 2 * margin
         available_width = rect.width() - 2 * margin
         
+        # Calculate layout
+        steering_wheel_size = min(available_width * 0.6, available_height * 0.6)
+        text_width = available_width - steering_wheel_size - 20  # 20px gap
+        
+        # Draw steering wheel
+        wheel_rect = QtCore.QRect(
+            int(rect.left() + margin),
+            int(rect.top() + margin + (available_height - steering_wheel_size) // 2),
+            int(steering_wheel_size),
+            int(steering_wheel_size)
+        )
+        steering = telemetry.get('steering', 0)
+        # Display the real steering angle in degrees, inverted
+        steering_angle_deg = -math.degrees(steering)
+        self._draw_steering_wheel(painter, wheel_rect, steering_angle_deg)
+        
         # Draw text section
-        text_rect = QtCore.QRect(rect.left() + margin, rect.top() + margin, 
-                                available_width, available_height)
+        text_rect = QtCore.QRect(
+            int(rect.left() + margin + steering_wheel_size + 20),
+            int(rect.top() + margin),
+            int(text_width),
+            int(available_height)
+        )
+        
+        lines = [
+            f"MPH: {telemetry.get('speed_mph', 0):.1f}",
+            f"RPM: {telemetry.get('rpm', 0):.0f}",
+            f"Gear: {telemetry.get('gear', 0)}"
+        ]
         self._draw_text_section(painter, text_rect, lines)
+
+    def _draw_steering_wheel(self, painter, rect, steering_angle):
+        """Draw a visual steering wheel representation."""
+        center_x = rect.center().x()
+        center_y = rect.center().y()
+        radius = min(rect.width(), rect.height()) // 2 - 10
+
+        # steering_angle is now the real angle in degrees
+
+        # Draw single wheel circle (white and thicker)
+        painter.setPen(QtGui.QPen(QtGui.QColor(255, 255, 255), 8))
+        painter.setBrush(QtCore.Qt.NoBrush)
+        painter.drawEllipse(int(center_x - radius), int(center_y - radius), int(radius * 2), int(radius * 2))
+
+        # Draw the 'center hub' as a bright cyan circle that rotates with the steering angle
+        hub_radius = radius * 0.15
+        hub_angle = math.radians(steering_angle - 90)  # -90 so 0 deg is top
+        hub_x = center_x + radius * 0.85 * math.cos(hub_angle)
+        hub_y = center_y + radius * 0.85 * math.sin(hub_angle)
+        painter.setPen(QtGui.QPen(QtGui.QColor(0, 255, 255), 2))
+        painter.setBrush(QtGui.QColor(0, 255, 255))
+        painter.drawEllipse(int(hub_x - hub_radius), int(hub_y - hub_radius), int(hub_radius * 2), int(hub_radius * 2))
+
+        # Draw a line from the center to the hub (optional, for clarity)
+        # painter.setPen(QtGui.QPen(QtGui.QColor(180, 180, 180), 2))
+        # painter.drawLine(int(center_x), int(center_y), int(hub_x), int(hub_y))
+
+        # Draw steering angle text at the bottom of the wheel
+        font = QtGui.QFont('Segoe UI', max(8, radius // 15), QtGui.QFont.Bold)
+        painter.setFont(font)
+        painter.setPen(QtGui.QPen(QtGui.QColor(255, 255, 255), 1))
+        angle_text = f"{steering_angle:.0f}°"
+        fm = QtGui.QFontMetrics(font)
+        text_width = fm.width(angle_text)
+        text_x = center_x - text_width // 2
+        text_y = center_y + radius + fm.height() + 5
+        painter.drawText(text_x, text_y, angle_text)
 
     def _draw_text_section(self, painter, rect, lines):
         """Draw the text section with responsive font sizing."""
